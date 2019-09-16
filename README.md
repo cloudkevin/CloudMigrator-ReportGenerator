@@ -15,3 +15,9 @@
 * Log file directory path - This can contain either ZIP or extracted migration report folders
 * Client prefix - This is used when generating the final report
 ```
+
+## Notes/Warnings
+```
+After generating reports the temporary CSVs will be deleted along with the referenced ZIP files 
+Migration report folders remain in place. To disable this functionality comment out line 24
+```
