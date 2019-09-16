@@ -134,9 +134,9 @@ def mergeToExcel(dir_name,client_name):
     os.remove('ExportFailureReport.csv')
     totalBar.next()
     totalBar.finish()
-    print("\n\n######################################")
-    print("**All Reports Generated Successfully**")
-    print("######################################")
+    print("\n\n#############################")
+    print("Report Generated Successfully")
+    print("#############################")
     print("\nFinal Report Location: "+ os.path.abspath(writer)+'\n')
 
 
