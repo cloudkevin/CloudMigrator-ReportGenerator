@@ -4,10 +4,10 @@
 ## Script Requirements
 ```
 * Python3
-* glob
 * progress
-* pathlib
 * pandas
+
+* pip3 install -r requirements.txt
 ```
 
 ## Required Inputs and Format
