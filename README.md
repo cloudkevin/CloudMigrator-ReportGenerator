@@ -1,23 +1,27 @@
 # CloudMigrator-ReportGenerator
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/db27982d6e9e4c1b9b2e565fb3ac2ba2)](https://www.codacy.com/manual/cloudkevin/CloudMigrator-ReportGenerator?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=cloudkevin/CloudMigrator-ReportGenerator&amp;utm_campaign=Badge_Grade)
 
-## Script Requirements
+## Script Setup and Requirements
 ```
-* Python3
-* progress
-* pandas
+Python3
 
-* pip3 install -r requirements.txt
-```
+Navigate to the directory folder and run: python3 setup.py install
 
-## Required Inputs and Format
-```
-* Log file directory path - This can contain either ZIP or extracted migration report folders
-* Client prefix - This is used when generating the final report
+To launch the program run: cmReportGenerator
+
+You may also run: pip3 install -r requirements.txt
+*This will only instal the requirements*
 ```
 
-## Notes/Warnings
+## Inputs and Format
 ```
-After generating reports the temporary CSVs will be deleted along with the referenced ZIP files 
-Migration report folders remain in place. To disable this functionality comment out line 24
+--help
+Display input options
+--prefix = string value (default=blank)
+Typically client name but may be any desired naming prefix
+--cleanup = 'yes'/'y' or 'no' (default=no)
+If set to yes the ZIP and temp CSV files will be deleted after running
+The report folders and FinalReport will remain
+--path = string (If no value is entered you will be prompted later)
+The path to the directoy which contains your CloudMigrator reports
 ```
