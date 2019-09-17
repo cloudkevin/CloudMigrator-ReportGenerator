@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, zipfile, csv, glob
+import os, zipfile, csv, glob, click
 import pandas as pd
 from pathlib import Path
 from progress.bar import Bar
@@ -11,25 +11,26 @@ logFiles = []
 importFailures = []
 exportFailures = []
 
-def unzipArchive(dir_name,extension): # unzip all migration reports in directory
-    for item in os.listdir(dir_name): # loop through items in dir
+
+def unzipArchive(path,extension): # unzip all migration reports in directory
+    for item in os.listdir(path): # loop through items in dir
         if item.endswith(extension): # check for ".zip" extension
             file_name = os.path.abspath(item) # get full path of files
             stripped_name = os.path.splitext(item)[0] # strip file extension for new folder name
             zip_ref = zipfile.ZipFile(file_name) # create zipfile object
-            new_path = os.path.join(dir_name, stripped_name) # create path that points to the folder that we will create
+            new_path = os.path.join(path, stripped_name) # create path that points to the folder that we will create
             try:
                 os.mkdir(stripped_name) # create folder removing .zip from name
                 zip_ref.extractall(new_path) # extract file to dir
-                os.remove(file_name) # delete zipped file
+                # os.remove(file_name) # delete zipped file
             except OSError as error:
                 print(error)
             zip_ref.close() # close file
-    for filename in Path(dir_name).glob('**/UserStatistics.csv'):
+    for filename in Path(path).glob('**/UserStatistics.csv'):
         logFiles.append(str(filename)) # create list of all extracted UserStatistics.csv files
-    for imfail in Path(dir_name).glob('**/ItemResultImport-*.csv'):
+    for imfail in Path(path).glob('**/ItemResultImport-*.csv'):
         importFailures.append(str(imfail))
-    for exfail in Path(dir_name).glob('**/ItemResultExport-*.csv'):
+    for exfail in Path(path).glob('**/ItemResultExport-*.csv'):
         exportFailures.append(str(exfail))
     totalBar.next()
 
@@ -120,10 +121,10 @@ def generateSummary():
     totalBar.next()
 
 
-def mergeToExcel(dir_name,client_name):
+def mergeToExcel(path,client_name):
     generatedReports = []
     writer = pd.ExcelWriter(client_name+'_MigrationReport.xlsx', engine='xlsxwriter')
-    for item in os.listdir(dir_name):
+    for item in os.listdir(path):
         if item.endswith('.csv'):
             generatedReports.append(item)
     for r in generatedReports:
@@ -131,9 +132,6 @@ def mergeToExcel(dir_name,client_name):
         stripped_name = os.path.splitext(r)[0]
         df.to_excel(writer, sheet_name=stripped_name,index=False)
     writer.save()
-    os.remove('MigrationSummary.csv')
-    os.remove('ImportFailureReport.csv')
-    os.remove('ExportFailureReport.csv')
     totalBar.next()
     totalBar.finish()
     print("\n\n#############################")
@@ -141,8 +139,18 @@ def mergeToExcel(dir_name,client_name):
     print("#############################")
     print("\nFinal Report Location: "+ os.path.abspath(writer)+'\n')
 
+def cleanArtifacts():
+    os.remove('MigrationSummary.csv')
+    os.remove('ImportFailureReport.csv')
+    os.remove('ExportFailureReport.csv')
 
-def main():
+
+@click.command()
+@click.option('--prefix', default='', help='Final report name prefix.')
+@click.option('--cleanup', default='no', help='Enter yes to remove ZIP files and generated CSVs.')
+@click.option('--path', default='none', help='Enter the directory path of your log files')
+
+def main(prefix,cleanup,path):
     global totalBar
     print('\n')
     print('####################################################################################################')
@@ -156,23 +164,27 @@ def main():
     print(r'                            |_|                                                                    ')
     print('####################################################################################################')
     print('\n')
-    dir_name = input("Log File Directory Path: ")
-    client_name = input("Enter client prefix: ")
+    if path == 'none':
+        path = input("Log File Directory Path: ")
+    # client_name = input("Enter client prefix: ")
     print('\n')
-    os.chdir(dir_name) # change directory from working dir to dir with files
-    previousReport = client_name + '_MigrationReport.xlsx'
+    os.chdir(path) # change directory from working dir to dir with files
+    # previousReport = client_name + '_MigrationReport.xlsx'
+    previousReport = prefix + '_MigrationReport.xlsx'
     if os.path.exists(previousReport): # do not run if previous report already generated
         print("\nERROR: Report has already been generated in this directory.\n")
     else:
         totalBar = Bar('Processing',max=7,fill='$')
         print('\n')
-        unzipArchive(dir_name,extension)
+        unzipArchive(path,extension)
         rawReport()
         importFailureReport()
         exportFailureReport()
         combineDuplicates()
         generateSummary()
-        mergeToExcel(dir_name,client_name)
+        mergeToExcel(path,prefix)
+        if cleanup.lower() == 'y' or 'yes':
+            cleanArtifacts()
 
 if __name__ == '__main__':
     main()
