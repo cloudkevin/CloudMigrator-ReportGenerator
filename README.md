@@ -7,21 +7,24 @@ Python3
 
 Navigate to the directory folder and run: python3 setup.py install
 
-To launch the program run: cmReportGenerator
+Usage: cmReportGenerator [OPTIONS]
 
 You may also run: pip3 install -r requirements.txt
-*This will only instal the requirements*
+*This will only install the requirements*
 ```
 
 ## Inputs and Format
 ```
 --help
 Display input options
+
 --prefix = string value (default=blank)
 Typically client name but may be any desired naming prefix
+
 --cleanup = 'yes'/'y' or 'no' (default=no)
 If set to yes the ZIP and temp CSV files will be deleted after running
 The report folders and FinalReport will remain
+
 --path = string (If no value is entered you will be prompted later)
 The path to the directoy which contains your CloudMigrator reports
 ```
