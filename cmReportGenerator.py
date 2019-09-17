@@ -56,6 +56,8 @@ def importFailureReport():
     lineCount = 0
     for file in importFailures:
         if file.endswith('.csv'):
+            # date_time = os.path.basename(os.path.dirname(file)) # get datetime for comparison
+            # newDate = datetime.strptime(date_time, '%d-%m-%Y-%H-%M-%S').date()
             with open(file,'r') as f1:
                 csv_reader = csv.reader(f1, delimiter=',')
                 with open('ImportFailureReport.csv','a', newline='') as f2:
