@@ -152,11 +152,11 @@ def cleanArtifacts():
 def clean_document_maps():
     lineCount = 0
     documentMaps.sort()
-    for map in documentMaps:
-        if map.endswith('.csv'):
-            date_time = os.path.basename(os.path.dirname(map)) # get datetime for comparison
+    for dm in documentMaps:
+        if dm.endswith('.csv'):
+            date_time = os.path.basename(os.path.dirname(dm)) # get datetime for comparison
             newDate = datetime.strptime(date_time, '%d-%m-%Y-%H-%M-%S').date()
-            with open(map,'r') as m:
+            with open(dm,'r') as m:
                 csv_reader = csv.reader(m,delimiter=',')
                 with open('FinalDocumentMap.csv','a',newline='') as fd:
                     csv_writer = csv.writer(fd,delimiter=',')
