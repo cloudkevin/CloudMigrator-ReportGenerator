@@ -3,6 +3,7 @@ import os, zipfile, csv, glob, click
 import pandas as pd
 from pathlib import Path
 from progress.bar import Bar
+from datetime import datetime
 
 extension = '.zip'
 header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path']
@@ -10,7 +11,7 @@ summaryHeader = ['UserId','TotalErrors','ErrorPercentage','TotalImportFailure','
 logFiles = []
 importFailures = []
 exportFailures = []
-
+documentMaps = []
 
 def unzipArchive(path,extension): # unzip all migration reports in directory
     for item in os.listdir(path): # loop through items in dir
@@ -32,6 +33,8 @@ def unzipArchive(path,extension): # unzip all migration reports in directory
         importFailures.append(str(imfail))
     for exfail in Path(path).glob('**/ItemResultExport-*.csv'):
         exportFailures.append(str(exfail))
+    for docMap in Path(path).glob('**/DocumentMappings.csv'):
+        documentMaps.append(str(docMap))
     totalBar.next()
 
 
@@ -126,7 +129,8 @@ def mergeToExcel(path,client_name):
     writer = pd.ExcelWriter(client_name+'_MigrationReport.xlsx', engine='xlsxwriter')
     for item in os.listdir(path):
         if item.endswith('.csv'):
-            generatedReports.append(item)
+            if 'FinalDocumentMap.csv' not in item:
+                generatedReports.append(item)
     for r in generatedReports:
         df = pd.read_csv(r)
         stripped_name = os.path.splitext(r)[0]
@@ -145,7 +149,32 @@ def cleanArtifacts():
     os.remove('ExportFailureReport.csv')
     os.remove('CombinedReport.csv')
 
-def loadingSplash():
+def clean_document_maps():
+    lineCount = 0
+    documentMaps.sort()
+    for map in documentMaps:
+        if map.endswith('.csv'):
+            date_time = os.path.basename(os.path.dirname(map)) # get datetime for comparison
+            newDate = datetime.strptime(date_time, '%d-%m-%Y-%H-%M-%S').date()
+            with open(map,'r') as m:
+                csv_reader = csv.reader(m,delimiter=',')
+                with open('FinalDocumentMap.csv','a',newline='') as fd:
+                    csv_writer = csv.writer(fd,delimiter=',')
+                    if lineCount == 0:
+                        csv_writer.writerow(['OriginalLocation','DestinationLocation','DestinationOwner','MimeType','Timestamp'])
+                        lineCount += 1
+                    next(csv_reader,None)
+                    for row in csv_reader:
+                        data = row + [newDate]
+                        csv_writer.writerow(data)
+                        lineCount +=1
+    pandaMap = pd.read_csv('FinalDocumentMap.csv')
+    pandaMap = pandaMap.sort_values(by=['DestinationOwner','OriginalLocation','Timestamp'],ascending=[True, True, False])
+    pandaMap2 = pandaMap.drop_duplicates(subset='OriginalLocation', keep= 'first')
+    pandaMap2.to_csv('FinalDocumentMap.csv',index=False)
+
+
+def loadingSplash(prefix,cleanup,path,docmap):
     print('\n')
     print('####################################################################################################')
     print(r'   _____ __  __   _____                       _      _____                           _             ')
@@ -158,16 +187,24 @@ def loadingSplash():
     print(r'                            |_|                                                                    ')
     print('####################################################################################################')
     print('\n')
+    print('\n')
+    if prefix != '':
+        print(f"Domain Pefix: {prefix}")
+    print(f"Remove ZIP and TMP files: {cleanup.upper()}")
+    if docmap != '':
+        print(f"Map Cleanup: {docmap.upper()}")
+    if path != '':
+        print(f"Dir Path: {path}")
 
 
 @click.command()
 @click.option('--prefix', default='', help='Final report name prefix.')
-@click.option('--cleanup', default='no', help='Enter yes to remove ZIP files and generated CSVs.')
+@click.option('--cleanup', default='', help='Enter True to remove ZIP files and generated CSVs.')
 @click.option('--path', default='none', help='Enter the directory path of your log files')
-
-def main(prefix,cleanup,path):
+@click.option('--docmap', default='', help='Cleanup document mapping reports')
+def main(prefix,cleanup,path,docmap):
     global totalBar
-    loadingSplash()
+    loadingSplash(prefix,cleanup,path,docmap)
     if path == 'none':
         path = input("Log File Directory Path: ")
     print('\n')
@@ -184,9 +221,8 @@ def main(prefix,cleanup,path):
         exportFailureReport()
         combineDuplicates()
         generateSummary()
-        mergeToExcel(path,prefix)
-        if cleanup.lower() == 'y' or 'yes':
+        if  docmap == 'yes':
+            clean_document_maps()
+        if cleanup == 'yes':
             cleanArtifacts()
-
-if __name__ == '__main__':
-    main()
+        mergeToExcel(path,prefix)
