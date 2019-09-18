@@ -143,15 +143,9 @@ def cleanArtifacts():
     os.remove('MigrationSummary.csv')
     os.remove('ImportFailureReport.csv')
     os.remove('ExportFailureReport.csv')
+    os.remove('CombinedReport.csv')
 
-
-@click.command()
-@click.option('--prefix', default='', help='Final report name prefix.')
-@click.option('--cleanup', default='no', help='Enter yes to remove ZIP files and generated CSVs.')
-@click.option('--path', default='none', help='Enter the directory path of your log files')
-
-def main(prefix,cleanup,path):
-    global totalBar
+def loadingSplash():
     print('\n')
     print('####################################################################################################')
     print(r'   _____ __  __   _____                       _      _____                           _             ')
@@ -164,12 +158,20 @@ def main(prefix,cleanup,path):
     print(r'                            |_|                                                                    ')
     print('####################################################################################################')
     print('\n')
+
+
+@click.command()
+@click.option('--prefix', default='', help='Final report name prefix.')
+@click.option('--cleanup', default='no', help='Enter yes to remove ZIP files and generated CSVs.')
+@click.option('--path', default='none', help='Enter the directory path of your log files')
+
+def main(prefix,cleanup,path):
+    global totalBar
+    loadingSplash()
     if path == 'none':
         path = input("Log File Directory Path: ")
-    # client_name = input("Enter client prefix: ")
     print('\n')
     os.chdir(path) # change directory from working dir to dir with files
-    # previousReport = client_name + '_MigrationReport.xlsx'
     previousReport = prefix + '_MigrationReport.xlsx'
     if os.path.exists(previousReport): # do not run if previous report already generated
         print("\nERROR: Report has already been generated in this directory.\n")
