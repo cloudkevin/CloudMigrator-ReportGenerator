@@ -28,3 +28,6 @@ This will compile all of the document mapping reports and leave only the most re
 
 --path = string (If no value is entered you will be prompted later)
 The path to the directoy which contains your CloudMigrator reports
+
+--logging = debug/info/warning/error/critical (default=INFO)
+This will log to a file called PREFIX_cmrg.log in the current directory
