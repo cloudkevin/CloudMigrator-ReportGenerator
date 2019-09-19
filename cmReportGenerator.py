@@ -129,10 +129,12 @@ def exportFailureReport():
     totalBar.next()
 
 
-def combineDuplicates(): # combine duplicates using UserId, add all numerical values and drop the rest
+def combineDuplicates(): # combine duplicates using UserId
     l.info('Starting combineDuplicates')
     df = pd.read_csv('RawReport.csv')
-    df2 = df.groupby(['UserId']).max()
+    df[['ImportMax','ExportMax']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('max') # get max values and add to column
+    df[['ImportSum','ExportSum']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('sum') # get sum of values and add to column
+    df2 = df.groupby(['UserId']).max()  # sort by UserId and take maximum values found for numberical columns
     df2.to_csv('CombinedReport.csv',header=True)
     l.info('Finished combineDuplicates')
     totalBar.next()
@@ -140,14 +142,14 @@ def combineDuplicates(): # combine duplicates using UserId, add all numerical va
 
 def generateSummary():
     l.info('Starting generateSummary')
-    summary = imErrorCount.join(exErrorCount, on='UserId')
-    summary = summary.fillna(0)
-    summary['TotalErrorCount'] = summary['ImportErrorCount'] + summary['ExportErrorCount']
-    cr = pd.read_csv('CombinedReport.csv',index_col=['UserId'])
-    cr = cr.join(summary, on='UserId')
+    summary = imErrorCount.join(exErrorCount, on='UserId') # combine import and export counts on UserId 
+    summary = summary.fillna(0) # if value is NaN replace with 0
+    summary['TotalErrorCount'] = summary['ImportErrorCount'] + summary['ExportErrorCount'] # create and populate TotalErrorCount column
+    cr = pd.read_csv('CombinedReport.csv',index_col=['UserId']) # open CombinedReport and sort by UserId
+    cr = cr.join(summary, on='UserId') # add newly calculated values to summary report
     cr['Error Percentage'] = cr['ImportErrorCount']/cr['TotalImportSuccess']
-    cr = cr.filter(['UserId','ImportErrorCount','ExportErrorCount','TotalErrorCount','TotalImportSuccess','Error Percentage','SizeImported'])
-    cr.to_csv('MigrationSummary.csv',header=True)
+    cr = cr.filter(['UserId','ImportErrorCount','ExportErrorCount','TotalErrorCount','TotalImportSuccess','Error Percentage','SizeImported']) # remove columns that we don't need
+    cr.to_csv('MigrationSummary.csv',header=True) # convert to CSV
     l.info('Finished generateSummary')
     totalBar.next()
 
