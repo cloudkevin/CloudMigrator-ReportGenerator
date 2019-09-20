@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, zipfile, csv, glob, click, math, pickle, cryptography
+import os, sys, zipfile, csv, glob, click, math, pickle, platform, oauth2client
 import pandas as pd
 from pathlib import Path
 from progress.bar import Bar
@@ -9,6 +9,7 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from apiclient.http import MediaFileUpload
+from subprocess import call
 
 extension = '.zip'
 header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path']
@@ -267,6 +268,8 @@ def loadingSplash(prefix,cleanup,path,docmap):
     print('\n')
     if prefix != '':
         print(f"Domain Pefix: {prefix}")
+    if cleanup == '':
+        cleanup = 'no'
     print(f"Remove ZIP and TMP files: {cleanup.upper()}")
     if docmap != '':
         print(f"Map Cleanup: {docmap.upper()}")
@@ -289,13 +292,17 @@ def set_logging_level(loglevel,prefix):
     elif loglevel == 'CRITICAL':
         ll = l.CRITICAL
     l.basicConfig(filename=logPath, level=ll,filemode='w', format='%(asctime)s:%(levelname)s:%(message)s')
+    l.getLogger('googleapicliet.discovery_cache').setLevel(l.ERROR)
     l.debug(f"Current Logging Level: {loglevel}")
+    l.info("Finished set_logging_level")
+
 
 def upload_to_drive(report, path):
     l.info("Starting upload_to_drive")
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     creds = None
     homePath = os.path.expanduser('~')
+    credsPath = homePath + '/credentials.json'
     picklePath = homePath + '/token.pickle'
     if os.path.exists(picklePath):
         l.debug("token.pickle already exists")
@@ -308,9 +315,12 @@ def upload_to_drive(report, path):
             creds.refresh(Request())
         else:
             try:
+                l.debug(f"Trying credential flow")
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    homePath, SCOPES)
+                    credsPath, SCOPES)
+                l.debug(f"Flow: {flow}")
                 creds = flow.run_local_server(port=0)
+                l.debug("Creds: {creds}")
             except:
                 print(f"Error: credentials.json file does not exist. Unable to upload report.\n")
                 l.debug("Unable location credentials.json file. Aborting function")
@@ -318,7 +328,6 @@ def upload_to_drive(report, path):
         # Save the credentials for the next run
         with open(picklePath, 'wb') as token:
             pickle.dump(creds, token)
-
     drive_service = build('drive', 'v3', credentials=creds)
     report = report.split('.')[0]
     file_metadata = {
@@ -333,9 +342,33 @@ def upload_to_drive(report, path):
                                         fields='id').execute()
     fileId = file.get('id')
     fileUrl = 'https://drive.google.com/open?id=' + fileId
+    protect_the_pickle(picklePath)
     print(f"FinalReport uploaded to Drive")
-    print(f"Uploaded file to URL: {fileUrl}  \n")
+    print(f"\nUploaded file to URL: {fileUrl}  \n")
     l.info("Finished upload_to_drive")
+
+def protect_the_pickle(pickle):
+    l.info("Starting protect_the_pickle")
+    if operatingSystem == "Darwin":
+        call(["chflags", "hidden", pickle])
+    elif operatingSystem == "Windows":
+        call(["attrib", "+H", pickle])
+    l.info("Finished protect_the_pickle")
+
+
+def startupCheck():
+    global operatingSystem
+    l.info("Starting startupCheck")
+    pythonVersion = platform.python_version()
+    l.debug(f"Python Version: {pythonVersion}")
+    if pythonVersion.startswith(str(3)) != True:
+        print(f"Run this program using Python3. Quitting Report Generator.")
+        l.debug("Wrong version of Python")
+        l.info("Closing Program")
+        sys.exit()
+    operatingSystem = platform.system()
+    l.debug(f"Current OS: {operatingSystem}")
+    l.info("Finished startupCheck")
 
 
 @click.command()
@@ -349,6 +382,7 @@ def main(prefix,cleanup,path,docmap,logging,todrive):
     """Hacking is not a crime"""
     set_logging_level(logging,prefix)
     l.info(f"Staring main")
+    startupCheck()
     global totalBar
     loadingSplash(prefix,cleanup,path,docmap)
     if path == 'none':
@@ -376,4 +410,4 @@ def main(prefix,cleanup,path,docmap,logging,todrive):
             cleanArtifacts()
         if todrive == 'yes':
             upload_to_drive(previousReport, finalReport)
-    l.info(f"Script Finished Running")
+    l.info(f"Program Finished Running")

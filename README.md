@@ -12,6 +12,8 @@ Usage: cmReportGenerator [OPTIONS]
 You may also run: pip3 install -r requirements.txt
 *This will only install the requirements*
 
+Requirements: If uploading to Google Drive a credentials.json file must be present in your home directory
+
 ## Inputs and Format
 --help
 Display input options
@@ -30,7 +32,7 @@ This will compile all of the document mapping reports and leave only the most re
 The path to the directoy which contains your CloudMigrator reports
 
 --logging = debug/info/warning/error/critical (default=INFO)
-This will log to a file called PREFIX_cmrg.log in the current directory
+This will log to a file called PREFIX_cmrg.log in your home directory
 
 --todrive = 'yes' or blank (default=no)
 Upload FinalReport to Drive and convert
