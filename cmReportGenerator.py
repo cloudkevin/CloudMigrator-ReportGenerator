@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-import os, zipfile, csv, glob, click
+import os, zipfile, csv, glob, click, math, pickle, cryptography
 import pandas as pd
 from pathlib import Path
 from progress.bar import Bar
 from datetime import datetime
 import logging as l
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from apiclient.http import MediaFileUpload
 
 extension = '.zip'
 header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path']
@@ -129,11 +133,35 @@ def exportFailureReport():
     totalBar.next()
 
 
-def combineDuplicates(): # combine duplicates using UserId
+def combineDuplicates(): # combine duplicates using UserId / also calculate total duration in minutes
     l.info('Starting combineDuplicates')
     df = pd.read_csv('RawReport.csv')
+    for i in range(len(df)):
+        durationSplit = df.loc[i, "Duration"].split(':')
+        seconds = durationSplit[2]
+        days = 0
+        hours = durationSplit[0]
+        minutes = int(durationSplit[1]) 
+
+        if '.' in seconds: # split days and hours then combine into one number
+            secSplit = durationSplit[2].split('.')
+            seconds = int(secSplit[0])
+
+        if '.' in hours:
+            hourSplit = hours.split('.')
+            days = hourSplit[0]
+            hours = hourSplit[1]
+
+        days = int(days) * 86400
+        hours = int(hours) * 3600
+        minutes = minutes * 60
+        daysHours =  days + hours
+        totalTime = (daysHours+seconds+minutes)
+        totalTime = round(totalTime/60, 1)
+        df.loc[i, "Duration"] = totalTime
+
     df[['ImportMax','ExportMax']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('max') # get max values and add to column
-    df[['ImportSum','ExportSum']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('sum') # get sum of values and add to column
+    df[['ImportSum','ExportSum','TotalDuration']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess','Duration'].transform('sum') # get sum of values and add to column
     df2 = df.groupby(['UserId']).max()  # sort by UserId and take maximum values found for numberical columns
     df2.to_csv('CombinedReport.csv',header=True)
     l.info('Finished combineDuplicates')
@@ -148,16 +176,17 @@ def generateSummary():
     cr = pd.read_csv('CombinedReport.csv',index_col=['UserId']) # open CombinedReport and sort by UserId
     cr = cr.join(summary, on='UserId') # add newly calculated values to summary report
     cr['Error Percentage'] = cr['ImportErrorCount']/cr['TotalImportSuccess']
-    cr = cr.filter(['UserId','ImportErrorCount','ExportErrorCount','TotalErrorCount','TotalImportSuccess','Error Percentage','SizeImported']) # remove columns that we don't need
+    cr = cr.filter(['UserId','ImportErrorCount','ExportErrorCount','TotalErrorCount','TotalImportSuccess','Error Percentage','SizeImported','TotalDuration']) # remove columns that we don't need
     cr.to_csv('MigrationSummary.csv',header=True) # convert to CSV
     l.info('Finished generateSummary')
     totalBar.next()
 
 
 def mergeToExcel(path,client_name):
+    global finalReport
     l.info('Starting mergeToExcel')
     generatedReports = []
-    writer = pd.ExcelWriter(client_name+'_MigrationReport.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter(client_name+'_MigrationReport.xlsx', engine='xlsxwriter',options={'strings_to_urls': False}) # write URLs as strings to avoid 65,530 URL limit
     for item in os.listdir(path):
         l.debug(f"Checking file: {item}")
         if item.endswith('.csv'):
@@ -173,10 +202,11 @@ def mergeToExcel(path,client_name):
     l.info('Finished mergeToExcel')
     totalBar.next()
     totalBar.finish()
+    finalReport = os.path.abspath(writer)
     print("\n\n#############################")
     print("Report Generated Successfully")
     print("#############################")
-    print("\nFinal Report Location: "+ os.path.abspath(writer)+'\n')
+    print(f"\nFinal Report Location: {finalReport}\n")
 
 def cleanArtifacts():
     l.info('Starting cleanArtifacts')
@@ -245,6 +275,8 @@ def loadingSplash(prefix,cleanup,path,docmap):
 
 def set_logging_level(loglevel,prefix):
     logFileName = prefix + '_cmrg.log'
+    homePath = os.path.expanduser('~')
+    logPath = homePath + '/' + logFileName
     loglevel = loglevel.upper()
     if loglevel == 'INFO':
         ll = l.INFO
@@ -256,8 +288,55 @@ def set_logging_level(loglevel,prefix):
         ll = l.ERROR
     elif loglevel == 'CRITICAL':
         ll = l.CRITICAL
-    l.basicConfig(filename=logFileName, level=ll,filemode='w', format='%(asctime)s:%(levelname)s:%(message)s')
+    l.basicConfig(filename=logPath, level=ll,filemode='w', format='%(asctime)s:%(levelname)s:%(message)s')
     l.debug(f"Current Logging Level: {loglevel}")
+
+def upload_to_drive(report, path):
+    l.info("Starting upload_to_drive")
+    SCOPES = ['https://www.googleapis.com/auth/drive.file']
+    creds = None
+    homePath = os.path.expanduser('~')
+    picklePath = homePath + '/token.pickle'
+    if os.path.exists(picklePath):
+        l.debug("token.pickle already exists")
+        with open(picklePath, 'rb') as token:
+            creds = pickle.load(token)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        l.debug("Prompting user to login")
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    homePath, SCOPES)
+                creds = flow.run_local_server(port=0)
+            except:
+                print(f"Error: credentials.json file does not exist. Unable to upload report.\n")
+                l.debug("Unable location credentials.json file. Aborting function")
+                return
+        # Save the credentials for the next run
+        with open(picklePath, 'wb') as token:
+            pickle.dump(creds, token)
+
+    drive_service = build('drive', 'v3', credentials=creds)
+    report = report.split('.')[0]
+    file_metadata = {
+    'name' : report,
+    'mimeType' : 'application/vnd.google-apps.spreadsheet'
+    }
+    media = MediaFileUpload(path,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        resumable=True)
+    file = drive_service.files().create(body=file_metadata,
+                                        media_body=media,
+                                        fields='id').execute()
+    fileId = file.get('id')
+    fileUrl = 'https://drive.google.com/open?id=' + fileId
+    print(f"FinalReport uploaded to Drive")
+    print(f"Uploaded file to URL: {fileUrl}  \n")
+    l.info("Finished upload_to_drive")
+
 
 @click.command()
 @click.option('--prefix', default='', help='Final report name prefix.')
@@ -265,8 +344,11 @@ def set_logging_level(loglevel,prefix):
 @click.option('--path', default='none', help='Enter the directory path of your log files')
 @click.option('--docmap', default='', help='Cleanup document mapping reports')
 @click.option('--logging', default='INFO', help='Set the logging level')
-def main(prefix,cleanup,path,docmap,logging):
+@click.option('--todrive', default='', help='Upload Final Report to Google Drive')
+def main(prefix,cleanup,path,docmap,logging,todrive):
+    """Hacking is not a crime"""
     set_logging_level(logging,prefix)
+    l.info(f"Staring main")
     global totalBar
     loadingSplash(prefix,cleanup,path,docmap)
     if path == 'none':
@@ -275,6 +357,8 @@ def main(prefix,cleanup,path,docmap,logging):
     os.chdir(path) # change directory from working dir to dir with files
     previousReport = prefix + '_MigrationReport.xlsx'
     if os.path.exists(previousReport): # do not run if previous report already generated
+        l.info(f"Report with name {previousReport} already exists")
+        l.info(f"Closing Program")
         print("\nERROR: Report has already been generated in this directory.\n")
     else:
         totalBar = Bar('Processing',max=7,fill='$')
@@ -290,3 +374,6 @@ def main(prefix,cleanup,path,docmap,logging):
             clean_document_maps()
         if cleanup == 'yes':
             cleanArtifacts()
+        if todrive == 'yes':
+            upload_to_drive(previousReport, finalReport)
+    l.info(f"Script Finished Running")

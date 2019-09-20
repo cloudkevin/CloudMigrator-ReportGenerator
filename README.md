@@ -31,3 +31,6 @@ The path to the directoy which contains your CloudMigrator reports
 
 --logging = debug/info/warning/error/critical (default=INFO)
 This will log to a file called PREFIX_cmrg.log in the current directory
+
+--todrive = 'yes' or blank (default=no)
+Upload FinalReport to Drive and convert
