@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, zipfile, csv, glob, click, math, pickle, platform, oauth2client
+import os, sys, zipfile, csv, glob, click, math, pickle, platform
 import pandas as pd
 from pathlib import Path
 from progress.bar import Bar
@@ -142,7 +142,7 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
         seconds = durationSplit[2]
         days = 0
         hours = durationSplit[0]
-        minutes = int(durationSplit[1]) 
+        minutes = int(durationSplit[1])
 
         if '.' in seconds: # split days and hours then combine into one number
             secSplit = durationSplit[2].split('.')
@@ -171,7 +171,7 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
 
 def generateSummary():
     l.info('Starting generateSummary')
-    summary = imErrorCount.join(exErrorCount, on='UserId') # combine import and export counts on UserId 
+    summary = imErrorCount.join(exErrorCount, on='UserId') # combine import and export counts on UserId
     summary = summary.fillna(0) # if value is NaN replace with 0
     summary['TotalErrorCount'] = summary['ImportErrorCount'] + summary['ExportErrorCount'] # create and populate TotalErrorCount column
     cr = pd.read_csv('CombinedReport.csv',index_col=['UserId']) # open CombinedReport and sort by UserId
