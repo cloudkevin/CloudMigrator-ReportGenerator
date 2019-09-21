@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, zipfile, csv, glob, click, math, pickle, platform
+import os, sys, zipfile, csv, glob, click, pickle, platform
 import pandas as pd
 from pathlib import Path
 from progress.bar import Bar
@@ -93,8 +93,13 @@ def importFailureReport():
                         lineCount += 1
                     next(csv_reader,None)
                     for row in csv_reader:
-                        data = row + [file[:-4]]
-                        csv_writer.writerow(data)
+                        if row[0] != 'Other':
+                            data = row + [file[:-4]]
+                            csv_writer.writerow(data)
+                        elif row[0] == 'Other':
+                            l.debug(f"OTHER error found, Skipping row: {row}")
+                            next(csv_reader,None)
+
     l.info('Cleaning ImportFailureReport')
     df = pd.read_csv('ImportFailureReport.csv')
     df2 = df.sort_values(by=['UserId', 'Failure'])
@@ -343,15 +348,15 @@ def upload_to_drive(report, path):
     fileId = file.get('id')
     fileUrl = 'https://drive.google.com/open?id=' + fileId
     protect_the_pickle(picklePath)
-    print(f"FinalReport uploaded to Drive")
+    print(f"Final Report uploaded to Drive")
     print(f"\nUploaded file to URL: {fileUrl}  \n")
     l.info("Finished upload_to_drive")
 
 def protect_the_pickle(pickle):
     l.info("Starting protect_the_pickle")
-    if operatingSystem == "Darwin":
+    if operatingSystem == "darwin":
         call(["chflags", "hidden", pickle])
-    elif operatingSystem == "Windows":
+    elif operatingSystem == "windows":
         call(["attrib", "+H", pickle])
     l.info("Finished protect_the_pickle")
 
@@ -366,7 +371,7 @@ def startupCheck():
         l.debug("Wrong version of Python")
         l.info("Closing Program")
         sys.exit()
-    operatingSystem = platform.system()
+    operatingSystem = platform.system().lower()
     l.debug(f"Current OS: {operatingSystem}")
     l.info("Finished startupCheck")
 
