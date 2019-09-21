@@ -69,8 +69,14 @@ def rawReport():
                         lineCount += 1
                     next(csv_reader,None)
                     for row in csv_reader:
-                        data = row + [file[:-4]]
-                        csv_writer.writerow(data)
+                        userId = str(row[0])
+                        userState = str(row[1].lower())
+                        l.debug(f"USER STATE: {userState}")
+                        if userState != 'none' and userState != 'failed' and row[2] != 'Processing...':
+                            data = row + [file[:-4]]
+                            csv_writer.writerow(data)
+                        elif userState == 'none' or 'failed':
+                            l.debug(f"Skipping Row: {row}")
     l.info('Finished rawReport')
     totalBar.next()
 
