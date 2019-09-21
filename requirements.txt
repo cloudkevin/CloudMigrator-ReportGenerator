@@ -1,3 +1,6 @@
 pandas==0.25.1
 progress==1.5
 click==7.0
+google-api-python-client==1.7.11
+google-auth-httplib2==0.0.3
+google-auth-oauthlib==0.4.0
