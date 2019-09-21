@@ -35,7 +35,7 @@ def unzipArchive(path,extension,cleanup): # unzip all migration reports in direc
                 if cleanup == 'yes':
                     os.remove(file_name) # delete zipped file
             except OSError as error:
-                print(error)
+                l.info(error)
             zip_ref.close() # close file
     for filename in Path(path).glob('**/UserStatistics.csv'):
         l.debug(f"Adding file to list of UserStatistics: {filename}")
@@ -394,9 +394,9 @@ def main(prefix,cleanup,path,docmap,logging,todrive):
         path = input("Log File Directory Path: ")
     print('\n')
     os.chdir(path) # change directory from working dir to dir with files
-    previousReport = prefix + '_MigrationReport.xlsx'
-    if os.path.exists(previousReport): # do not run if previous report already generated
-        l.info(f"Report with name {previousReport} already exists")
+    reportName = prefix + '_MigrationReport.xlsx'
+    if os.path.exists(reportName): # do not run if previous report already generated
+        l.info(f"Report with name {reportName} already exists")
         l.info(f"Closing Program")
         print("\nERROR: Report has already been generated in this directory.\n")
     else:
@@ -414,5 +414,5 @@ def main(prefix,cleanup,path,docmap,logging,todrive):
         if cleanup == 'yes':
             cleanArtifacts()
         if todrive == 'yes':
-            upload_to_drive(previousReport, finalReport)
+            upload_to_drive(reportName, finalReport)
     l.info(f"Program Finished Running")
