@@ -10,9 +10,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from apiclient.http import MediaFileUpload
 from subprocess import call
+from bs4 import BeautifulSoup
 
 extension = '.zip'
-header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path']
+header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path','Email From Date','Email To Date']
 summaryHeader = ['UserId','TotalErrors','ErrorPercentage','TotalImportFailure','TotalExportFailure']
 logFiles = []
 importFailures = []
@@ -60,6 +61,14 @@ def rawReport():
         if file.endswith('.csv'):
             l.info(f"Adding file to RawReport: {file}")
             with open(file,'r') as f1:
+                currentPath = os.path.dirname(file)
+                l.debug('Starting search for MigrationReports*.html')
+                for r in Path(currentPath).glob('**/MigrationReport*.html'):
+                    with open(r,'r') as report:
+                        l.debug(f'Opening MigrationReport: {r}')
+                        soup = BeautifulSoup(report, 'html.parser')
+                        emailFrom = soup.find('td', text='Migrate Email From').find_next_sibling("td").text.split(' ', 2)[0]
+                        emailTo = soup.find('td', text='Migrate Email To').find_next_sibling("td").text.split(' ', 2)[0]
                 csv_reader = csv.reader(f1, delimiter=',')
                 with open('RawReport.csv','a', newline='') as f2:
                     csv_writer = csv.writer(f2,delimiter=',')
@@ -73,6 +82,8 @@ def rawReport():
                         l.debug(f"USER STATE: {userState}")
                         if userState != 'none' and userState != 'failed' and row[2] != 'Processing...':
                             data = row + [file[:-4]]
+                            data.append(emailFrom)
+                            data.append(emailTo)
                             csv_writer.writerow(data)
                         elif userState == 'none' or 'failed':
                             l.debug(f"Skipping Row: {row}")
@@ -104,7 +115,6 @@ def importFailureReport():
                         elif row[0] == 'Other':
                             l.debug(f"OTHER error found, Skipping row: {row}")
                             next(csv_reader,None)
-
     l.info('Cleaning ImportFailureReport')
     df = pd.read_csv('ImportFailureReport.csv')
     df2 = df.sort_values(by=['UserId', 'Failure'])
@@ -152,16 +162,13 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
         days = 0
         hours = durationSplit[0]
         minutes = int(durationSplit[1])
-
         if '.' in seconds: # split days and hours then combine into one number
             secSplit = durationSplit[2].split('.')
             seconds = int(secSplit[0])
-
         if '.' in hours:
             hourSplit = hours.split('.')
             days = hourSplit[0]
             hours = hourSplit[1]
-
         days = int(days) * 86400
         hours = int(hours) * 3600
         minutes = minutes * 60
@@ -169,7 +176,6 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
         totalTime = (daysHours+seconds+minutes)
         totalTime = round(totalTime/60, 1)
         df.loc[i, "Duration"] = totalTime
-
     df[['ImportMax','ExportMax']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('max') # get max values and add to column
     df[['ImportSum','ExportSum','TotalDuration']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess','Duration'].transform('sum') # get sum of values and add to column
     df2 = df.groupby(['UserId']).max()  # sort by UserId and take maximum values found for numberical columns
