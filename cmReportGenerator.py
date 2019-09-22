@@ -52,7 +52,6 @@ def unzipArchive(path,extension,cleanup): # unzip all migration reports in direc
     l.info('Finished unzipArchive')
     totalBar.next()
 
-
 def rawReport():
     l.info('Starting rawReport')
     lineCount = 0
@@ -144,7 +143,6 @@ def exportFailureReport():
     l.info('Finished exportFailureReport')
     totalBar.next()
 
-
 def combineDuplicates(): # combine duplicates using UserId / also calculate total duration in minutes
     l.info('Starting combineDuplicates')
     df = pd.read_csv('RawReport.csv')
@@ -179,7 +177,6 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
     l.info('Finished combineDuplicates')
     totalBar.next()
 
-
 def generateSummary():
     l.info('Starting generateSummary')
     summary = imErrorCount.join(exErrorCount, on='UserId') # combine import and export counts on UserId
@@ -192,7 +189,6 @@ def generateSummary():
     cr.to_csv('MigrationSummary.csv',header=True) # convert to CSV
     l.info('Finished generateSummary')
     totalBar.next()
-
 
 def mergeToExcel(path,client_name):
     global finalReport
@@ -262,7 +258,6 @@ def clean_document_maps():
     pandaMap2.to_csv('FinalDocumentMap.csv',index=False)
     l.info('Finished cleaning FinalDocumentMap')
 
-
 def loadingSplash(prefix,cleanup,path,docmap):
     print('\n')
     print('####################################################################################################')
@@ -306,7 +301,6 @@ def set_logging_level(loglevel,prefix):
     l.getLogger('googleapicliet.discovery_cache').setLevel(l.ERROR)
     l.debug(f"Current Logging Level: {loglevel}")
     l.info("Finished set_logging_level")
-
 
 def upload_to_drive(report, path):
     l.info("Starting upload_to_drive")
@@ -366,9 +360,11 @@ def protect_the_pickle(pickle):
         call(["attrib", "+H", pickle])
     l.info("Finished protect_the_pickle")
 
-
-def startupCheck():
+def startupCheck(prefix,path):
     global operatingSystem
+    if path == 'none':
+        l.debug(f"Prompting user for path")
+        path = input("\nLog File Directory Path: ")
     l.info("Starting startupCheck")
     pythonVersion = platform.python_version()
     l.debug(f"Python Version: {pythonVersion}")
@@ -379,6 +375,13 @@ def startupCheck():
         sys.exit()
     operatingSystem = platform.system().lower()
     l.debug(f"Current OS: {operatingSystem}")
+    os.chdir(path)
+    reportName = prefix + '_MigrationReport.xlsx'
+    if os.path.exists(reportName): # do not run if previous report already generated
+        l.info(f"Report with name {reportName} already exists")
+        l.info(f"Closing Program")
+        print("\nERROR: Report has already been generated in this directory.\n")
+        sys.exit()
     l.info("Finished startupCheck")
 
 
@@ -390,35 +393,25 @@ def startupCheck():
 @click.option('--logging', default='INFO', help='Set the logging level')
 @click.option('--todrive', default='', help='Upload Final Report to Google Drive')
 def main(prefix,cleanup,path,docmap,logging,todrive):
-    """Hacking is not a crime"""
     set_logging_level(logging,prefix)
     l.info(f"Staring main")
-    startupCheck()
-    global totalBar
     loadingSplash(prefix,cleanup,path,docmap)
-    if path == 'none':
-        path = input("Log File Directory Path: ")
+    startupCheck(prefix,path)
+    global totalBar
     print('\n')
-    os.chdir(path) # change directory from working dir to dir with files
-    reportName = prefix + '_MigrationReport.xlsx'
-    if os.path.exists(reportName): # do not run if previous report already generated
-        l.info(f"Report with name {reportName} already exists")
-        l.info(f"Closing Program")
-        print("\nERROR: Report has already been generated in this directory.\n")
-    else:
-        totalBar = Bar('Processing',max=7,fill='$')
-        print('\n')
-        unzipArchive(path,extension,cleanup)
-        rawReport()
-        importFailureReport()
-        exportFailureReport()
-        combineDuplicates()
-        generateSummary()
-        mergeToExcel(path,prefix)
-        if  docmap == 'yes':
-            clean_document_maps()
-        if cleanup == 'yes':
-            cleanArtifacts()
-        if todrive == 'yes':
-            upload_to_drive(reportName, finalReport)
+    totalBar = Bar('Processing',max=7,fill='$')
+    print('\n')
+    unzipArchive(path,extension,cleanup)
+    rawReport()
+    importFailureReport()
+    exportFailureReport()
+    combineDuplicates()
+    generateSummary()
+    mergeToExcel(path,prefix)
+    if  docmap == 'yes':
+        clean_document_maps()
+    if cleanup == 'yes':
+        cleanArtifacts()
+    if todrive == 'yes':
+        upload_to_drive(reportName, finalReport)
     l.info(f"Program Finished Running")
