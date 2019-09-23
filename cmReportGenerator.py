@@ -10,9 +10,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from apiclient.http import MediaFileUpload
 from subprocess import call
+from bs4 import BeautifulSoup
 
 extension = '.zip'
-header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path']
+header = ['UserId','State','Status','TotalImportSuccess','TotalImportFailure','TotalExportSuccess','TotalExportFailure','EmailExportSuccess','EmailExportFailure','AppointmentExportSuccess','AppointmentExportFailure','TaskExportSuccess','TaskExportFailure','ContactExportSuccess','ContactExportFailure','GroupExportSuccess','GroupExportFailure','GroupMemberExportSuccess','GroupMemberExportFailure','DocumentExportSuccess','DocumentExportFailure','OtherExportSuccess','OtherExportFailure','FolderExportFailure','EmailImportSuccess','EmailImportFailure','AppointmentImportSuccess','AppointmentImportFailure','TaskImportSuccess','TaskImportFailure','ContactImportSuccess','ContactImportFailure','GroupImportSuccess','GroupImportFailure','GroupMemberImportSuccess','GroupMemberImportFailure','DocumentImportSuccess','DocumentImportFailure','OtherImportSuccess','OtherImportFailure','StartTime','EndTime','Duration','SizeImported','ServerId','BLANK','CSV File Path','Email From Date','Email To Date']
 summaryHeader = ['UserId','TotalErrors','ErrorPercentage','TotalImportFailure','TotalExportFailure']
 logFiles = []
 importFailures = []
@@ -35,7 +36,7 @@ def unzipArchive(path,extension,cleanup): # unzip all migration reports in direc
                 if cleanup == 'yes':
                     os.remove(file_name) # delete zipped file
             except OSError as error:
-                print(error)
+                l.info(error)
             zip_ref.close() # close file
     for filename in Path(path).glob('**/UserStatistics.csv'):
         l.debug(f"Adding file to list of UserStatistics: {filename}")
@@ -52,7 +53,6 @@ def unzipArchive(path,extension,cleanup): # unzip all migration reports in direc
     l.info('Finished unzipArchive')
     totalBar.next()
 
-
 def rawReport():
     l.info('Starting rawReport')
     lineCount = 0
@@ -61,6 +61,14 @@ def rawReport():
         if file.endswith('.csv'):
             l.info(f"Adding file to RawReport: {file}")
             with open(file,'r') as f1:
+                currentPath = os.path.dirname(file)
+                l.debug('Starting search for MigrationReports*.html')
+                for r in Path(currentPath).glob('**/MigrationReport*.html'):
+                    with open(r,'r') as report:
+                        l.debug(f'Opening MigrationReport: {r}')
+                        soup = BeautifulSoup(report, 'html.parser')
+                        emailFrom = soup.find('td', text='Migrate Email From').find_next_sibling("td").text.split(' ', 2)[0]
+                        emailTo = soup.find('td', text='Migrate Email To').find_next_sibling("td").text.split(' ', 2)[0]
                 csv_reader = csv.reader(f1, delimiter=',')
                 with open('RawReport.csv','a', newline='') as f2:
                     csv_writer = csv.writer(f2,delimiter=',')
@@ -69,8 +77,15 @@ def rawReport():
                         lineCount += 1
                     next(csv_reader,None)
                     for row in csv_reader:
-                        data = row + [file[:-4]]
-                        csv_writer.writerow(data)
+                        userState = str(row[1].lower())
+                        l.debug(f"USER STATE: {userState}")
+                        if userState != 'none' and userState != 'failed' and row[2] != 'Processing...':
+                            data = row + [file[:-4]]
+                            data.append(emailFrom)
+                            data.append(emailTo)
+                            csv_writer.writerow(data)
+                        elif userState == 'none' or 'failed':
+                            l.debug(f"Skipping Row: {row}")
     l.info('Finished rawReport')
     totalBar.next()
 
@@ -99,7 +114,6 @@ def importFailureReport():
                         elif row[0] == 'Other':
                             l.debug(f"OTHER error found, Skipping row: {row}")
                             next(csv_reader,None)
-
     l.info('Cleaning ImportFailureReport')
     df = pd.read_csv('ImportFailureReport.csv')
     df2 = df.sort_values(by=['UserId', 'Failure'])
@@ -138,8 +152,7 @@ def exportFailureReport():
     l.info('Finished exportFailureReport')
     totalBar.next()
 
-
-def combineDuplicates(): # combine duplicates using UserId / also calculate total duration in minutes
+def combineDuplicates(overlap): # combine duplicates using UserId / also calculate total duration in minutes
     l.info('Starting combineDuplicates')
     df = pd.read_csv('RawReport.csv')
     for i in range(len(df)):
@@ -148,31 +161,29 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
         days = 0
         hours = durationSplit[0]
         minutes = int(durationSplit[1])
-
         if '.' in seconds: # split days and hours then combine into one number
             secSplit = durationSplit[2].split('.')
             seconds = int(secSplit[0])
-
         if '.' in hours:
             hourSplit = hours.split('.')
             days = hourSplit[0]
             hours = hourSplit[1]
-
         days = int(days) * 86400
         hours = int(hours) * 3600
         minutes = minutes * 60
         daysHours =  days + hours
         totalTime = (daysHours+seconds+minutes)
         totalTime = round(totalTime/60, 1)
-        df.loc[i, "Duration"] = totalTime
-
-    df[['ImportMax','ExportMax']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('max') # get max values and add to column
-    df[['ImportSum','ExportSum','TotalDuration']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess','Duration'].transform('sum') # get sum of values and add to column
-    df2 = df.groupby(['UserId']).max()  # sort by UserId and take maximum values found for numberical columns
+        df.loc[i, "TotalDuration"] = totalTime
+    if overlap == 'yes':
+        l.info('Removing overlapping date ranges')
+        df2 = df.sort_values(by=['UserId','Email From Date','Email To Date','TotalImportSuccess'],ascending=[True,True, False, False]).drop_duplicates(subset=['UserId','Email From Date','Email To Date'], keep='first') # take largest migration run if date ranges overlap
+        df2 = df2.groupby(['UserId']).sum()
+    elif overlap == 'no':
+        df2 = df.groupby(['UserId']).sum()  # sort by UserId and take sum of numberical columns
     df2.to_csv('CombinedReport.csv',header=True)
     l.info('Finished combineDuplicates')
     totalBar.next()
-
 
 def generateSummary():
     l.info('Starting generateSummary')
@@ -186,7 +197,6 @@ def generateSummary():
     cr.to_csv('MigrationSummary.csv',header=True) # convert to CSV
     l.info('Finished generateSummary')
     totalBar.next()
-
 
 def mergeToExcel(path,client_name):
     global finalReport
@@ -256,8 +266,7 @@ def clean_document_maps():
     pandaMap2.to_csv('FinalDocumentMap.csv',index=False)
     l.info('Finished cleaning FinalDocumentMap')
 
-
-def loadingSplash(prefix,cleanup,path,docmap):
+def loadingSplash(prefix,cleanup,path,docmap,overlap):
     print('\n')
     print('####################################################################################################')
     print(r'   _____ __  __   _____                       _      _____                           _             ')
@@ -273,11 +282,11 @@ def loadingSplash(prefix,cleanup,path,docmap):
     print('\n')
     if prefix != '':
         print(f"Domain Pefix: {prefix}")
-    if cleanup == '':
-        cleanup = 'no'
     print(f"Remove ZIP and TMP files: {cleanup.upper()}")
     if docmap != '':
         print(f"Map Cleanup: {docmap.upper()}")
+    if overlap == 'yes':
+        print(f"Removing overlap date ranges: {overlap.upper()}")
     if path != '':
         print(f"Dir Path: {path}")
 
@@ -300,7 +309,6 @@ def set_logging_level(loglevel,prefix):
     l.getLogger('googleapicliet.discovery_cache').setLevel(l.ERROR)
     l.debug(f"Current Logging Level: {loglevel}")
     l.info("Finished set_logging_level")
-
 
 def upload_to_drive(report, path):
     l.info("Starting upload_to_drive")
@@ -360,9 +368,11 @@ def protect_the_pickle(pickle):
         call(["attrib", "+H", pickle])
     l.info("Finished protect_the_pickle")
 
-
-def startupCheck():
+def startupCheck(prefix,path):
     global operatingSystem
+    if path == 'none':
+        l.debug(f"Prompting user for path")
+        path = input("\nLog File Directory Path: ")
     l.info("Starting startupCheck")
     pythonVersion = platform.python_version()
     l.debug(f"Python Version: {pythonVersion}")
@@ -373,46 +383,44 @@ def startupCheck():
         sys.exit()
     operatingSystem = platform.system().lower()
     l.debug(f"Current OS: {operatingSystem}")
+    os.chdir(path)
+    reportName = prefix + '_MigrationReport.xlsx'
+    if os.path.exists(reportName): # do not run if previous report already generated
+        l.info(f"Report with name {reportName} already exists")
+        l.info(f"Closing Program")
+        print("\nERROR: Report has already been generated in this directory.\n")
+        sys.exit()
     l.info("Finished startupCheck")
 
 
 @click.command()
 @click.option('--prefix', default='', help='Final report name prefix.')
-@click.option('--cleanup', default='', help='Enter True to remove ZIP files and generated CSVs.')
+@click.option('--cleanup', default='no', help='Enter True to remove ZIP files and generated CSVs.')
 @click.option('--path', default='none', help='Enter the directory path of your log files')
 @click.option('--docmap', default='', help='Cleanup document mapping reports')
 @click.option('--logging', default='INFO', help='Set the logging level')
 @click.option('--todrive', default='', help='Upload Final Report to Google Drive')
-def main(prefix,cleanup,path,docmap,logging,todrive):
-    """Hacking is not a crime"""
+@click.option('--overlap', default='no', help='This will remove identical date ranges keeping max')
+def main(prefix,cleanup,path,docmap,logging,todrive,overlap):
     set_logging_level(logging,prefix)
     l.info(f"Staring main")
-    startupCheck()
+    loadingSplash(prefix,cleanup,path,docmap,overlap)
+    startupCheck(prefix,path)
     global totalBar
-    loadingSplash(prefix,cleanup,path,docmap)
-    if path == 'none':
-        path = input("Log File Directory Path: ")
     print('\n')
-    os.chdir(path) # change directory from working dir to dir with files
-    previousReport = prefix + '_MigrationReport.xlsx'
-    if os.path.exists(previousReport): # do not run if previous report already generated
-        l.info(f"Report with name {previousReport} already exists")
-        l.info(f"Closing Program")
-        print("\nERROR: Report has already been generated in this directory.\n")
-    else:
-        totalBar = Bar('Processing',max=7,fill='$')
-        print('\n')
-        unzipArchive(path,extension,cleanup)
-        rawReport()
-        importFailureReport()
-        exportFailureReport()
-        combineDuplicates()
-        generateSummary()
-        mergeToExcel(path,prefix)
-        if  docmap == 'yes':
-            clean_document_maps()
-        if cleanup == 'yes':
-            cleanArtifacts()
-        if todrive == 'yes':
-            upload_to_drive(previousReport, finalReport)
+    totalBar = Bar('Processing',max=7,fill='$')
+    print('\n')
+    unzipArchive(path,extension,cleanup)
+    rawReport()
+    importFailureReport()
+    exportFailureReport()
+    combineDuplicates(overlap)
+    generateSummary()
+    mergeToExcel(path,prefix)
+    if  docmap == 'yes':
+        clean_document_maps()
+    if cleanup == 'yes':
+        cleanArtifacts()
+    if todrive == 'yes':
+        upload_to_drive(reportName, finalReport)
     l.info(f"Program Finished Running")
