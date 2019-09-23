@@ -370,6 +370,7 @@ def protect_the_pickle(pickle):
 
 def startupCheck(prefix,path):
     global operatingSystem
+    global reportName
     if path == 'none':
         l.debug(f"Prompting user for path")
         path = input("\nLog File Directory Path: ")
