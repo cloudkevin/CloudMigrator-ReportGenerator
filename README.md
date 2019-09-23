@@ -34,8 +34,8 @@ The path to the directoy which contains your CloudMigrator reports
 --logging = debug/info/warning/error/critical (default=INFO)  
 This will log to a file called PREFIX_cmrg.log in your home directory
 
---todrive = 'yes' or blank (default=no)  
-Upload FinalReport to Drive and convert
-
 --overlap = 'yes' or blank (default=no)  
 If your logs contain multiple runs with the same target date (EMAIL ONLY) it will take the highest value and remove the duplicates
+
+--todrive = 'yes' or blank (default=no)  
+Upload FinalReport to Drive and convert
