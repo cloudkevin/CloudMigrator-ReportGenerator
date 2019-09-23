@@ -1,6 +1,7 @@
 # CloudMigrator-ReportGenerator
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/db27982d6e9e4c1b9b2e565fb3ac2ba2)](https://www.codacy.com/manual/cloudkevin/CloudMigrator-ReportGenerator?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=cloudkevin/CloudMigrator-ReportGenerator&amp;utm_campaign=Badge_Grade)
 
+*This has not been fully tested on Windows. You should consider using Darwin or Linux instead.*
 ## Script Setup and Requirements
 
 Python3
