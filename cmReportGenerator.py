@@ -77,7 +77,6 @@ def rawReport():
                         lineCount += 1
                     next(csv_reader,None)
                     for row in csv_reader:
-                        userId = str(row[0])
                         userState = str(row[1].lower())
                         l.debug(f"USER STATE: {userState}")
                         if userState != 'none' and userState != 'failed' and row[2] != 'Processing...':
@@ -153,7 +152,7 @@ def exportFailureReport():
     l.info('Finished exportFailureReport')
     totalBar.next()
 
-def combineDuplicates(): # combine duplicates using UserId / also calculate total duration in minutes
+def combineDuplicates(overlap): # combine duplicates using UserId / also calculate total duration in minutes
     l.info('Starting combineDuplicates')
     df = pd.read_csv('RawReport.csv')
     for i in range(len(df)):
@@ -175,10 +174,13 @@ def combineDuplicates(): # combine duplicates using UserId / also calculate tota
         daysHours =  days + hours
         totalTime = (daysHours+seconds+minutes)
         totalTime = round(totalTime/60, 1)
-        df.loc[i, "Duration"] = totalTime
-    df[['ImportMax','ExportMax']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess'].transform('max') # get max values and add to column
-    df[['ImportSum','ExportSum','TotalDuration']]=df.groupby('UserId')['TotalImportSuccess','TotalExportSuccess','Duration'].transform('sum') # get sum of values and add to column
-    df2 = df.groupby(['UserId']).max()  # sort by UserId and take maximum values found for numberical columns
+        df.loc[i, "TotalDuration"] = totalTime
+    if overlap == 'yes':
+        l.info('Removing overlapping date ranges')
+        df2 = df.sort_values(by=['UserId','Email From Date','Email To Date','TotalImportSuccess'],ascending=[True,True, False, False]).drop_duplicates(subset=['UserId','Email From Date','Email To Date'], keep='first') # take largest migration run if date ranges overlap
+        df2 = df2.groupby(['UserId']).sum()
+    elif overlap == 'no':
+        df2 = df.groupby(['UserId']).sum()  # sort by UserId and take sum of numberical columns
     df2.to_csv('CombinedReport.csv',header=True)
     l.info('Finished combineDuplicates')
     totalBar.next()
@@ -264,7 +266,7 @@ def clean_document_maps():
     pandaMap2.to_csv('FinalDocumentMap.csv',index=False)
     l.info('Finished cleaning FinalDocumentMap')
 
-def loadingSplash(prefix,cleanup,path,docmap):
+def loadingSplash(prefix,cleanup,path,docmap,overlap):
     print('\n')
     print('####################################################################################################')
     print(r'   _____ __  __   _____                       _      _____                           _             ')
@@ -280,11 +282,11 @@ def loadingSplash(prefix,cleanup,path,docmap):
     print('\n')
     if prefix != '':
         print(f"Domain Pefix: {prefix}")
-    if cleanup == '':
-        cleanup = 'no'
     print(f"Remove ZIP and TMP files: {cleanup.upper()}")
     if docmap != '':
         print(f"Map Cleanup: {docmap.upper()}")
+    if overlap == 'yes':
+        print(f"Removing overlap date ranges: {overlap.upper()}")
     if path != '':
         print(f"Dir Path: {path}")
 
@@ -393,15 +395,16 @@ def startupCheck(prefix,path):
 
 @click.command()
 @click.option('--prefix', default='', help='Final report name prefix.')
-@click.option('--cleanup', default='', help='Enter True to remove ZIP files and generated CSVs.')
+@click.option('--cleanup', default='no', help='Enter True to remove ZIP files and generated CSVs.')
 @click.option('--path', default='none', help='Enter the directory path of your log files')
 @click.option('--docmap', default='', help='Cleanup document mapping reports')
 @click.option('--logging', default='INFO', help='Set the logging level')
 @click.option('--todrive', default='', help='Upload Final Report to Google Drive')
-def main(prefix,cleanup,path,docmap,logging,todrive):
+@click.option('--overlap', default='no', help='This will remove identical date ranges keeping max')
+def main(prefix,cleanup,path,docmap,logging,todrive,overlap):
     set_logging_level(logging,prefix)
     l.info(f"Staring main")
-    loadingSplash(prefix,cleanup,path,docmap)
+    loadingSplash(prefix,cleanup,path,docmap,overlap)
     startupCheck(prefix,path)
     global totalBar
     print('\n')
@@ -411,7 +414,7 @@ def main(prefix,cleanup,path,docmap,logging,todrive):
     rawReport()
     importFailureReport()
     exportFailureReport()
-    combineDuplicates()
+    combineDuplicates(overlap)
     generateSummary()
     mergeToExcel(path,prefix)
     if  docmap == 'yes':
