@@ -18,21 +18,24 @@ Requirements: If uploading to Google Drive a credentials.json file must be prese
 --help
 Display input options
 
---prefix = string value (default=blank)
+--prefix = string value (default=blank)  
 Typically client name but may be any desired naming prefix
 
---cleanup = 'yes' or blank (default=no)
+--cleanup = 'yes' or blank (default=no)  
 If set to yes the ZIP and temp CSV files will be deleted after running
 The report folders and FinalReport will remain
 
---docmap = 'yes' or blank (default=no)
+--docmap = 'yes' or blank (default=no)  
 This will compile all of the document mapping reports and leave only the most recent Drive URL
 
---path = string (If no value is entered you will be prompted later)
+--path = string (If no value is entered you will be prompted later)  
 The path to the directoy which contains your CloudMigrator reports
 
---logging = debug/info/warning/error/critical (default=INFO)
+--logging = debug/info/warning/error/critical (default=INFO)  
 This will log to a file called PREFIX_cmrg.log in your home directory
 
---todrive = 'yes' or blank (default=no)
+--todrive = 'yes' or blank (default=no)  
 Upload FinalReport to Drive and convert
+
+--overlap = 'yes' or blank (default=no)  
+If your logs contain multiple runs with the same target date (EMAIL ONLY) it will take the highest value and remove the duplicates
