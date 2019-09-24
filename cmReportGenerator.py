@@ -193,6 +193,7 @@ def generateSummary():
     cr = pd.read_csv('CombinedReport.csv',index_col=['UserId']) # open CombinedReport and sort by UserId
     cr = cr.join(summary, on='UserId') # add newly calculated values to summary report
     cr['Error Percentage'] = cr['ImportErrorCount']/cr['TotalImportSuccess']
+    cr["SizeImported"] = cr["SizeImported"]/1024/1024 # convert size from bytes to mb
     cr = cr.filter(['UserId','ImportErrorCount','ExportErrorCount','TotalErrorCount','TotalImportSuccess','Error Percentage','SizeImported','TotalDuration']) # remove columns that we don't need
     cr.to_csv('MigrationSummary.csv',header=True) # convert to CSV
     l.info('Finished generateSummary')
