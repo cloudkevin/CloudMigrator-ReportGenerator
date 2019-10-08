@@ -40,3 +40,6 @@ If your logs contain multiple runs with the same target date (EMAIL ONLY) it wil
 
 --todrive = 'yes' or blank (default=no)  
 Upload FinalReport to Drive and convert
+
+## Demo
+[![asciicast](https://asciinema.org/a/rTppzDBtRw1dVg33IFu4m0eyN.svg)](https://asciinema.org/a/rTppzDBtRw1dVg33IFu4m0eyN)
